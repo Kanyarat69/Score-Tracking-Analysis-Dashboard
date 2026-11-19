@@ -1,0 +1,1254 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบติดตามและวิเคราะห์การบันทึกคะแนนเก็บ | สำนักงานวิชาการ</title>
+
+  <!-- Google Fonts: Sarabun -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Custom Stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Chart.js & SheetJS (XLSX) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+  <!-- ==================== TOP ENTERPRISE HEADER ==================== -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1">
+          <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+          <path d="M6 12v5c3 3 9 3 12 0v-5" />
+        </svg>
+      </div>
+      <div>
+        <div class="header-org">สำนักงานวิชาการ • Office of Academic Affairs</div>
+        <h1 class="header-title">ระบบติดตามและวิเคราะห์การบันทึกคะแนนเก็บ</h1>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <div class="status-pill" id="dataStatusPill">
+        <span class="status-dot"></span>
+        <span id="processingStatusText">รอการนำเข้าข้อมูลจริง (Excel)</span>
+      </div>
+
+      <button type="button" class="btn btn-magenta" onclick="openExcelImportModal()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+        <span>นำเข้าไฟล์ Excel</span>
+      </button>
+
+      <button type="button" class="btn btn-outline-light" onclick="downloadSampleExcel()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="7 10 12 15 17 10" />
+          <line x1="12" y1="15" x2="12" y2="3" />
+        </svg>
+        <span>เทมเพลต Excel</span>
+      </button>
+
+      <button type="button" class="btn btn-gold" id="btnPresentation" onclick="togglePresentationMode()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+          <line x1="8" y1="21" x2="16" y2="21" />
+          <line x1="12" y1="17" x2="12" y2="21" />
+        </svg>
+        <span>โหมดนำเสนอ</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ==================== NAVIGATION TABS ==================== -->
+  <nav class="nav-tabs-bar" aria-label="เมนูหลัก">
+    <div class="nav-tabs-inner">
+      <button class="nav-tab active" data-page="overview" onclick="switchPage('overview', this)">
+        <svg class="nav-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="3" width="7" height="7" rx="1.5" />
+          <rect x="14" y="14" width="7" height="7" rx="1.5" />
+          <rect x="3" y="14" width="7" height="7" rx="1.5" />
+        </svg>
+        <span>1. ภาพรวมระดับมหาวิทยาลัย (University Overview)</span>
+      </button>
+
+      <button class="nav-tab" data-page="faculty" onclick="switchPage('faculty', this)">
+        <svg class="nav-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" />
+        </svg>
+        <span>2. วิเคราะห์รายคณะและสาขา (Faculty &amp; Program)</span>
+      </button>
+
+      <button class="nav-tab" data-page="lecturer" onclick="switchPage('lecturer', this)">
+        <svg class="nav-tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </svg>
+        <span>3. ติดตามอาจารย์รายบุคคล (Individual Instructor)</span>
+      </button>
+    </div>
+
+    <!-- Drill-down Breadcrumb -->
+    <div class="drilldown-bar" id="drilldownBreadcrumb">
+      <span class="drill-item active" onclick="drillToOverview()">มหาวิทยาลัย</span>
+    </div>
+  </nav>
+
+  <!-- ==================== MAIN CONTAINER ==================== -->
+  <main class="container">
+
+    <!-- ==================== PAGE 1: UNIVERSITY OVERVIEW ==================== -->
+    <section id="page-overview">
+
+      <!-- Scope & Academic Term Filter Bar -->
+      <div class="scope-filter-card">
+        <div class="scope-info-group">
+          <span class="term-badge" id="activeTermBadge">สรุปจำนวนกลุ่มเรียนที่บันทึกคะแนน ระดับปริญญาตรี ภาค 1/2569 รอบที่ 2</span>
+          <span class="round-chip" id="activeRoundChip">การบันทึกคะแนนเก็บ รอบที่ 2 (ครั้งที่ 6-10)</span>
+          <span class="governance-note" id="excludedGovernanceText">
+            คัดแยกกลุ่มเรียนที่ได้รับยกเว้น (0 กลุ่ม) และยังไม่ถึงกำหนดส่ง (0 กลุ่ม) ออกจากฐานคำนวณแล้ว
+          </span>
+        </div>
+
+        <div class="scope-controls-group">
+          <div class="inline-filter">
+            <label for="ovYearSelect">ปีการศึกษา</label>
+            <select id="ovYearSelect" class="form-select-sm" onchange="syncTermBannerFromSelectors()">
+              <option value="2569">2569</option>
+              <option value="2568">2568</option>
+            </select>
+          </div>
+          <div class="inline-filter">
+            <label for="ovSemSelect">ภาคการศึกษา</label>
+            <select id="ovSemSelect" class="form-select-sm" onchange="syncTermBannerFromSelectors()">
+              <option value="1">ภาค 1</option>
+              <option value="2">ภาค 2</option>
+              <option value="3">ภาคฤดูร้อน</option>
+            </select>
+          </div>
+          <div class="inline-filter">
+            <label for="ovRoundSelect">รอบการบันทึก</label>
+            <select id="ovRoundSelect" class="form-select-sm" onchange="syncTermBannerFromSelectors()">
+              <option value="2">รอบที่ 2 (ครั้งที่ 6-10)</option>
+              <option value="1">รอบที่ 1 (ครั้งที่ 1-5)</option>
+            </select>
+          </div>
+          <div class="date-stamp" id="lastUpdatedText">ข้อมูล ณ วันที่: รอการนำเข้าข้อมูล</div>
+        </div>
+      </div>
+
+      <!-- Empty / Guidance Banner -->
+      <div class="guidance-banner" id="guidanceBanner">
+        <div class="guidance-left">
+          <div class="guidance-icon"></div>
+          <div>
+            <strong>เริ่มต้นใช้งานระบบติดตามการบันทึกคะแนนเก็บ:</strong> คลิกปุ่ม <strong>“นำเข้าไฟล์ Excel”</strong> เพื่อตรวจสอบตัวอย่างข้อมูล ตรวจสอบความถูกต้อง และแสดงผลวิเคราะห์ทันที
+          </div>
+        </div>
+        <button type="button" class="btn btn-magenta btn-sm" onclick="openExcelImportModal()">+ นำเข้าไฟล์ Excel ตอนนี้</button>
+      </div>
+
+      <!-- SECTION 01: ภาพรวมรายวิชาตามแผน (In-Plan) -->
+      <div class="section-block">
+        <div class="section-header-row">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-steel">01</span>
+            <div>
+              <h2 class="section-heading" id="sec01Title">ภาพรวมรายวิชาตามแผน (In-Plan Courses)</h2>
+              <p class="section-subdesc">ตัวชี้วัดหลักระดับมหาวิทยาลัยสำหรับรายวิชาในแผนการศึกษา</p>
+            </div>
+          </div>
+          <span class="section-tag tag-steel">ตามแผน (In-Plan)</span>
+        </div>
+
+        <div class="kpi-grid-4">
+          <div class="kpi-card accent-steel">
+            <div class="kpi-top-row">
+              <div>
+                <div class="kpi-label">จำนวนกลุ่มเรียนทั้งหมด</div>
+                <div class="kpi-value" id="inTotalGroups">0</div>
+              </div>
+              <div class="kpi-icon-box icon-steel">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-footer-line">
+              <span>จำนวนรายวิชา: <strong id="inSubjectCount">0</strong> วิชา</span>
+              <span class="kpi-mini-tag tag-steel-soft">ฐาน 100%</span>
+            </div>
+          </div>
+
+          <div class="kpi-card accent-green">
+            <div class="kpi-top-row">
+              <div>
+                <div class="kpi-label">จำนวนกลุ่มเรียนที่บันทึกแล้ว</div>
+                <div class="kpi-value-inline">
+                  <span class="kpi-value text-green" id="inRecordedGroups">0</span>
+                  <span class="kpi-pct-pill pill-green" id="inRecordedPct">0.00%</span>
+                </div>
+              </div>
+              <div class="kpi-icon-box icon-green">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-footer-line">
+              <span>ดำเนินการบันทึกคะแนนเก็บเรียบร้อย</span>
+              <span class="kpi-mini-tag tag-green-soft">บันทึกแล้ว</span>
+            </div>
+          </div>
+
+          <div class="kpi-card accent-gold">
+            <div class="kpi-top-row">
+              <div>
+                <div class="kpi-label">จำนวนกลุ่มเรียนที่ยังไม่บันทึก</div>
+                <div class="kpi-value-inline">
+                  <span class="kpi-value text-gold" id="inUnrecordedGroups">0</span>
+                  <span class="kpi-pct-pill pill-gold" id="inUnrecordedPct">0.00%</span>
+                </div>
+              </div>
+              <div class="kpi-icon-box icon-gold">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-footer-line">
+              <span>ร้อยละกลุ่มที่ไม่ได้บันทึกคะแนนเก็บ</span>
+              <span class="kpi-mini-tag tag-gold-soft" id="inUnrecordedPctSub">0.00%</span>
+            </div>
+          </div>
+
+          <div class="kpi-card accent-magenta">
+            <div class="kpi-top-row">
+              <div>
+                <div class="kpi-label">เปอร์เซ็นต์ความสำเร็จ (ตามแผน)</div>
+                <div class="kpi-value text-magenta" id="inRecordedPctSub">0.00%</div>
+              </div>
+              <div class="kpi-icon-box icon-magenta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                  <polyline points="17 6 23 6 23 12" />
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-progress-wrapper">
+              <div class="kpi-progress-track">
+                <div class="kpi-progress-fill fill-green" id="inProgressBar" style="width: 0%;"></div>
+              </div>
+              <div class="kpi-progress-caption">
+                <span>เป้าหมายคุณภาพ: 95.00%</span>
+                <strong id="inTargetStatusText">รอข้อมูล</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 02: ภาพรวมรายวิชานอกแผน (Out-of-Plan) -->
+      <div class="section-block">
+        <div class="section-header-row">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-navy">02</span>
+            <div>
+              <h2 class="section-heading" id="sec02Title">ภาพรวมรายวิชานอกแผน (Out-of-Plan Courses)</h2>
+              <p class="section-subdesc">ตัวชี้วัดหลักระดับมหาวิทยาลัยสำหรับรายวิชานอกแผนการศึกษา</p>
+            </div>
+          </div>
+          <span class="section-tag tag-navy">นอกแผน (Out-of-Plan)</span>
+        </div>
+
+        <div class="kpi-grid-4">
+          <div class="kpi-card accent-navy">
+            <div class="kpi-top-row">
+              <div>
+                <div class="kpi-label">จำนวนกลุ่มเรียนทั้งหมด</div>
+                <div class="kpi-value" id="outTotalGroups">0</div>
+              </div>
+              <div class="kpi-icon-box icon-navy">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-footer-line">
+              <span>จำนวนรายวิชา: <strong id="outSubjectCount">0</strong> วิชา</span>
+              <span class="kpi-mini-tag tag-navy-soft">ฐาน 100%</span>
+            </div>
+          </div>
+
+          <div class="kpi-card accent-green">
+            <div class="kpi-top-row">
+              <div>
+                <div class="kpi-label">จำนวนกลุ่มเรียนที่บันทึกแล้ว</div>
+                <div class="kpi-value-inline">
+                  <span class="kpi-value text-green" id="outRecordedGroups">0</span>
+                  <span class="kpi-pct-pill pill-green" id="outRecordedPct">0.00%</span>
+                </div>
+              </div>
+              <div class="kpi-icon-box icon-green">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                  <polyline points="22 4 12 14.01 9 11.01" />
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-footer-line">
+              <span>ดำเนินการบันทึกคะแนนเก็บเรียบร้อย</span>
+              <span class="kpi-mini-tag tag-green-soft">บันทึกแล้ว</span>
+            </div>
+          </div>
+
+          <div class="kpi-card accent-gold">
+            <div class="kpi-top-row">
+              <div>
+                <div class="kpi-label">จำนวนกลุ่มเรียนที่ยังไม่บันทึก</div>
+                <div class="kpi-value-inline">
+                  <span class="kpi-value text-gold" id="outUnrecordedGroups">0</span>
+                  <span class="kpi-pct-pill pill-gold" id="outUnrecordedPct">0.00%</span>
+                </div>
+              </div>
+              <div class="kpi-icon-box icon-gold">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-footer-line">
+              <span>ร้อยละกลุ่มที่ไม่ได้บันทึกคะแนนเก็บ</span>
+              <span class="kpi-mini-tag tag-gold-soft" id="outUnrecordedPctSub">0.00%</span>
+            </div>
+          </div>
+
+          <div class="kpi-card accent-magenta">
+            <div class="kpi-top-row">
+              <div>
+                <div class="kpi-label">เปอร์เซ็นต์ความสำเร็จ (นอกแผน)</div>
+                <div class="kpi-value text-magenta" id="outRecordedPctSub">0.00%</div>
+              </div>
+              <div class="kpi-icon-box icon-magenta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+                  <polyline points="17 6 23 6 23 12" />
+                </svg>
+              </div>
+            </div>
+            <div class="kpi-progress-wrapper">
+              <div class="kpi-progress-track">
+                <div class="kpi-progress-fill fill-green" id="outProgressBar" style="width: 0%;"></div>
+              </div>
+              <div class="kpi-progress-caption">
+                <span>เป้าหมายคุณภาพ: 95.00%</span>
+                <strong id="outTargetStatusText">รอข้อมูล</strong>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 03: วิเคราะห์สัดส่วนและเปรียบเทียบสถานะแต่ละคณะ -->
+      <div class="section-block">
+        <div class="section-header-row">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-magenta">03</span>
+            <div>
+              <h2 class="section-heading">วิเคราะห์สัดส่วนและเปรียบเทียบสถานะแต่ละคณะ</h2>
+              <p class="section-subdesc">แสดงสัดส่วนการบันทึกระดับมหาวิทยาลัย และคณะที่ต้องติดตามเร่งด่วน</p>
+            </div>
+          </div>
+
+          <div class="type-toggle-group" role="group" aria-label="สลับดูข้อมูลตามแผนและนอกแผน">
+            <button type="button" class="type-toggle-btn active" data-ctype="IN_PLAN" onclick="setOverviewReportType('IN_PLAN')">
+              ตามแผน (In-Plan)
+            </button>
+            <button type="button" class="type-toggle-btn" data-ctype="OUT_OF_PLAN" onclick="setOverviewReportType('OUT_OF_PLAN')">
+              นอกแผน (Out-of-Plan)
+            </button>
+          </div>
+        </div>
+
+        <!-- Donut Chart + Highlight Most Pending Faculty Card -->
+        <div class="overview-insight-grid">
+          <div class="panel-card">
+            <div class="panel-header">
+              <div>
+                <h3 class="panel-title">สัดส่วนการบันทึกคะแนนเก็บภาพรวม</h3>
+                <p class="panel-subtitle" id="donutSubtitle">ฐานข้อมูล: ตามแผน • เปรียบเทียบบันทึกแล้ว vs ยังไม่บันทึก</p>
+              </div>
+              <span class="section-tag tag-steel" id="donutTypeBadge">ตามแผน</span>
+            </div>
+            <div class="donut-layout">
+              <div class="donut-canvas-box">
+                <canvas id="overviewDonutChart"></canvas>
+                <div class="donut-center-label">
+                  <span class="donut-center-pct" id="donutCenterPct">0.00%</span>
+                  <span class="donut-center-sub">ความสำเร็จ</span>
+                </div>
+              </div>
+              <div class="donut-legend-list">
+                <div class="donut-stat-item">
+                  <span class="dot-indicator bg-green"></span>
+                  <div class="donut-stat-info">
+                    <div class="donut-stat-title">บันทึกคะแนนเก็บแล้ว</div>
+                    <div class="donut-stat-val"><strong id="donutRecCount">0</strong> กลุ่ม (<span id="donutRecPct">0.00%</span>)</div>
+                  </div>
+                </div>
+                <div class="donut-stat-item">
+                  <span class="dot-indicator bg-gold"></span>
+                  <div class="donut-stat-info">
+                    <div class="donut-stat-title">ยังไม่บันทึกคะแนนเก็บ</div>
+                    <div class="donut-stat-val"><strong id="donutUnrecCount">0</strong> กลุ่ม (<span id="donutUnrecPct">0.00%</span>)</div>
+                  </div>
+                </div>
+                <div class="donut-stat-divider"></div>
+                <div class="donut-stat-total">
+                  <span>กลุ่มเรียนที่ต้องบันทึกทั้งหมด</span>
+                  <strong id="donutTotalCount">0 กลุ่ม</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Highlight Faculty with Most Pending Groups -->
+          <div class="panel-card highlight-pending-card">
+            <div class="panel-header" style="margin-bottom: 12px;">
+              <div>
+                <span class="highlight-eyebrow">⚡ คณะที่มีรายการค้างบันทึกมากที่สุด</span>
+                <h3 class="panel-title" id="highlightFacultyName" style="font-size: 1.25rem; margin-top: 4px;">รอการนำเข้าข้อมูล</h3>
+              </div>
+              <button type="button" class="btn btn-magenta btn-sm" id="btnDrillHighlightFaculty" onclick="drillToHighlightFaculty()" disabled>
+                เจาะลึกรายสาขา →
+              </button>
+            </div>
+
+            <p class="panel-subtitle" id="highlightFacultyDesc" style="margin-bottom: 16px;">
+              ระบบจะระบุคณะที่มีจำนวนกลุ่มเรียนยังไม่บันทึกสูงสุดโดยอัตโนมัติ เพื่อให้ฝ่ายวิชาการติดตามได้ตรงจุด
+            </p>
+
+            <div class="highlight-metrics-row">
+              <div class="hl-metric-box hl-gold">
+                <span class="hl-metric-label">ยังไม่บันทึก (ค้างส่ง)</span>
+                <strong class="hl-metric-num text-gold" id="hlUnrecGroups">0</strong>
+                <span class="hl-metric-sub" id="hlUnrecPct">0.00% ของคณะ</span>
+              </div>
+              <div class="hl-metric-box hl-green">
+                <span class="hl-metric-label">บันทึกแล้ว</span>
+                <strong class="hl-metric-num text-green" id="hlRecGroups">0</strong>
+                <span class="hl-metric-sub" id="hlRecPct">0.00% สำเร็จ</span>
+              </div>
+              <div class="hl-metric-box hl-steel">
+                <span class="hl-metric-label">กลุ่มเรียนทั้งหมด</span>
+                <strong class="hl-metric-num text-navy" id="hlTotalGroups">0</strong>
+                <span class="hl-metric-sub" id="hlSubjectCount">0 รายวิชา</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================== PAGE 2: FACULTY & PROGRAM ANALYSIS ==================== -->
+    <section id="page-faculty" style="display: none;">
+
+      <div class="panel-card" style="margin-bottom: 22px;">
+        <div class="panel-header" style="margin-bottom: 14px;">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-navy">01</span>
+            <div>
+              <h2 class="section-heading">วิเคราะห์ข้อมูลระดับคณะและสาขาวิชา (Faculty &amp; Program Analysis)</h2>
+              <p class="section-subdesc" id="p2ScopeBreadcrumb">ขอบเขตข้อมูลปัจจุบัน: <strong>ตามแผน</strong> • ทุกคณะ • ทุกสาขาวิชา</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <span class="section-tag tag-steel" id="p2ActiveTypeBadge">ประเภทข้อมูล: ตามแผน</span>
+            <button type="button" class="btn btn-navy-solid btn-sm" onclick="exportPage2FacultyExcel()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>ส่งออกรายการตามตัวกรอง</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="resetPage2Filters()">↺ ล้างตัวกรอง</button>
+          </div>
+        </div>
+
+        <div class="filter-controls-grid">
+          <div class="filter-field">
+            <label class="filter-label">1. ประเภทรายวิชา</label>
+            <div class="type-toggle-group" style="width: 100%;">
+              <button type="button" class="type-toggle-btn seg-type-btn active" style="flex: 1;" data-p2type="IN_PLAN" onclick="setPage2CourseType('IN_PLAN')">
+                ตามแผน
+              </button>
+              <button type="button" class="type-toggle-btn seg-type-btn" style="flex: 1;" data-p2type="OUT_OF_PLAN" onclick="setPage2CourseType('OUT_OF_PLAN')">
+                นอกแผน
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-field">
+            <label for="p2FacultySelect" class="filter-label">2. คณะตามสังกัดวิชา</label>
+            <select id="p2FacultySelect" class="form-select" onchange="onPage2FacultyChange()">
+              <option value="ALL">ทุกคณะ (All Faculties)</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="p2MajorSelect" class="filter-label">3. สาขาวิชา</label>
+            <select id="p2MajorSelect" class="form-select" onchange="renderPage2FacultyAnalysis()">
+              <option value="ALL">ทุกสาขาวิชา (All Majors)</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="p2StatusSelect" class="filter-label">4. มุมมองตารางที่แสดง</label>
+            <select id="p2StatusSelect" class="form-select" onchange="onPage2StatusDropdownChange()">
+              <option value="ALL">สรุปข้อมูลแยกตามคณะ (ภาพรวม)</option>
+              <option value="RECORDED">เฉพาะกลุ่มที่บันทึกแล้ว</option>
+              <option value="UNRECORDED">เฉพาะกลุ่มที่ยังไม่บันทึก</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Cards 4 ใบ (คลิกเลือกเพื่อแสดงตารางตามหมวดหมู่) -->
+      <div class="kpi-grid-4" style="margin-bottom: 24px;">
+        <div class="kpi-card accent-steel kpi-clickable active-kpi-card" id="p2Card-ALL" onclick="selectPage2CardView('ALL')">
+          <div class="kpi-label">จำนวนกลุ่มเรียนทั้งหมด</div>
+          <div class="kpi-value" id="p2TotalCount">0</div>
+          <div class="kpi-footer-line">
+            <span>กลุ่มเรียนตามเงื่อนไขที่เลือก</span>
+            <span class="kpi-mini-tag tag-steel-soft">คลิกดูสรุปรายคณะ</span>
+          </div>
+        </div>
+
+        <div class="kpi-card accent-green kpi-clickable" id="p2Card-RECORDED" onclick="selectPage2CardView('RECORDED')">
+          <div class="kpi-label">จำนวนกลุ่มเรียนที่บันทึกแล้ว</div>
+          <div class="kpi-value-inline">
+            <span class="kpi-value text-green" id="p2RecordedCount">0</span>
+            <span class="kpi-pct-pill pill-green" id="p2RecordedPctText">0.00%</span>
+          </div>
+          <div class="kpi-footer-line">
+            <span>ดำเนินการบันทึกคะแนนเก็บแล้ว</span>
+            <span class="kpi-mini-tag tag-green-soft">คลิกดูตารางรายกลุ่ม</span>
+          </div>
+        </div>
+
+        <div class="kpi-card accent-gold kpi-clickable" id="p2Card-UNRECORDED" onclick="selectPage2CardView('UNRECORDED')">
+          <div class="kpi-label">จำนวนกลุ่มเรียนที่ยังไม่บันทึก</div>
+          <div class="kpi-value-inline">
+            <span class="kpi-value text-gold" id="p2UnrecordedCount">0</span>
+            <span class="kpi-pct-pill pill-gold" id="p2UnrecordedPctText">0.00%</span>
+          </div>
+          <div class="kpi-footer-line">
+            <span>กลุ่มเรียนที่รอการบันทึกคะแนน</span>
+            <span class="kpi-mini-tag tag-gold-soft">คลิกดูตารางรายกลุ่ม</span>
+          </div>
+        </div>
+
+        <div class="kpi-card accent-magenta kpi-clickable" id="p2Card-SUCCESS" onclick="selectPage2CardView('SUCCESS')">
+          <div class="kpi-label">เปอร์เซ็นต์ความสำเร็จ</div>
+          <div class="kpi-value text-magenta" id="p2SuccessRate">0.00%</div>
+          <div class="kpi-progress-wrapper">
+            <div class="kpi-progress-track">
+              <div class="kpi-progress-fill fill-green" id="p2ProgressBar" style="width: 0%;"></div>
+            </div>
+            <div class="kpi-progress-caption">
+              <span>เทียบรายสาขาวิชา</span>
+              <strong style="color: var(--magenta);">คลิกดูตารางสาขา</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SECTION 02 (ในหน้าวิเคราะห์รายคณะ): ตารางสรุปข้อมูลแยกตามคณะ -->
+      <div class="panel-card" id="p2FacultySummaryWrapper" style="margin-bottom: 24px;">
+        <div class="panel-header">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-navy">02</span>
+            <div>
+              <h3 class="panel-title">ตารางสรุปข้อมูลแยกตามคณะ</h3>
+              <p class="panel-subtitle">คลิกที่ชื่อคณะเพื่อเจาะลึกข้อมูลระดับสาขาวิชา (Drill-Down) หรือคลิกหัวตารางเพื่อเรียงลำดับ</p>
+            </div>
+          </div>
+
+          <div class="section-toolbar">
+            <div class="type-toggle-group" role="group">
+              <button type="button" class="type-toggle-btn seg-type-btn active" data-p2type="IN_PLAN" onclick="setPage2CourseType('IN_PLAN')">
+                ตามแผน
+              </button>
+              <button type="button" class="type-toggle-btn seg-type-btn" data-p2type="OUT_OF_PLAN" onclick="setPage2CourseType('OUT_OF_PLAN')">
+                นอกแผน
+              </button>
+            </div>
+
+            <select id="overviewStatusFilterSelect" class="form-select" style="width: auto; min-width: 200px;" onchange="renderOverviewFacultyTableOnly()">
+              <option value="ALL">สถานะ: ทั้งหมด</option>
+              <option value="HAS_UNRECORDED">มีกลุ่มที่ยังไม่บันทึก (&gt; 0)</option>
+              <option value="COMPLETED_100">บันทึกครบ 100% แล้ว</option>
+              <option value="BELOW_95">ต่ำกว่าเกณฑ์ 95%</option>
+            </select>
+
+            <button type="button" class="btn btn-navy-solid btn-sm" onclick="exportOverviewSummaryExcel()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>ส่งออกตารางสรุป Excel</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="table-scroll-container">
+          <table class="data-table corporate-table">
+            <thead>
+              <tr>
+                <th class="sortable-th" style="width: 64px; text-align: center;" onclick="sortOverviewTable('order')">
+                  ลำดับ <span class="sort-icon" id="sort-ov-order">⇅</span>
+                </th>
+                <th class="sortable-th" style="min-width: 200px;" onclick="sortOverviewTable('faculty')">
+                  คณะ <span class="sort-icon" id="sort-ov-faculty">⇅</span>
+                </th>
+                <th class="sortable-th" style="text-align: center;" onclick="sortOverviewTable('subjectCount')">
+                  จำนวนรายวิชา <span class="sort-icon" id="sort-ov-subjectCount">⇅</span>
+                </th>
+                <th class="sortable-th" style="text-align: center;" onclick="sortOverviewTable('totalGroups')">
+                  จำนวนกลุ่มทั้งหมด <span class="sort-icon" id="sort-ov-totalGroups">⇅</span>
+                </th>
+                <th class="sortable-th" style="text-align: center;" onclick="sortOverviewTable('recordedGroups')">
+                  บันทึกแล้ว <span class="sort-icon" id="sort-ov-recordedGroups">⇅</span>
+                </th>
+                <th class="sortable-th" style="text-align: center;" onclick="sortOverviewTable('recordedPct')">
+                  ร้อยละที่บันทึก <span class="sort-icon" id="sort-ov-recordedPct">⇅</span>
+                </th>
+                <th class="sortable-th" style="text-align: center;" onclick="sortOverviewTable('unrecordedGroups')">
+                  ยังไม่บันทึก <span class="sort-icon" id="sort-ov-unrecordedGroups">⇅</span>
+                </th>
+                <th class="sortable-th" style="text-align: center;" onclick="sortOverviewTable('unrecordedPct')">
+                  ร้อยละยังไม่บันทึก <span class="sort-icon" id="sort-ov-unrecordedPct">⇅</span>
+                </th>
+                <th style="width: 120px; text-align: center;">เจาะลึก</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyOverviewFacultySummary">
+              <tr>
+                <td colspan="9" class="empty-table-cell">ยังไม่มีข้อมูลในระบบ กรุณากดปุ่ม "นำเข้าไฟล์ Excel" ด้านบน</td>
+              </tr>
+            </tbody>
+            <tfoot id="tfootOverviewFacultySummary" style="display: none;">
+              <tr class="summary-total-row">
+                <td style="text-align: center;">—</td>
+                <td><strong>รวมทั้งมหาวิทยาลัย</strong></td>
+                <td style="text-align: center;" id="sumColSubjects">0</td>
+                <td style="text-align: center;" id="sumColTotalGroups">0</td>
+                <td style="text-align: center; color: #269C79;" id="sumColRecordedGroups">0</td>
+                <td style="text-align: center; color: #269C79;" id="sumColRecordedPct">0.00%</td>
+                <td style="text-align: center; color: #B45309;" id="sumColUnrecordedGroups">0</td>
+                <td style="text-align: center; color: #B45309;" id="sumColUnrecordedPct">0.00%</td>
+                <td style="text-align: center;">—</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div class="table-footer-note">
+          <span>แสดงข้อมูล <strong id="overviewFacultyRowCount">0</strong> คณะ (<span id="overviewTableTypeLabel">ตามแผน</span>)</span>
+          <span>คลิกชื่อคณะหรือปุ่ม “ดูสาขาวิชา” เพื่อเจาะลึกข้อมูลต่อ</span>
+        </div>
+      </div>
+
+      <!-- กราฟเปรียบเทียบรายสาขาวิชา -->
+      <div class="panel-card" id="p2MajorChartPanel" style="margin-bottom: 24px; display: none;">
+        <div class="panel-header">
+          <div>
+            <h3 class="panel-title" id="p2MajorChartTitle">เปรียบเทียบผลการบันทึกคะแนนเก็บแยกตามสาขาวิชา</h3>
+            <p class="panel-subtitle" id="p2MajorChartSub">แสดงจำนวนกลุ่มที่บันทึกแล้ว (สีเขียว) และยังไม่บันทึก (สีทอง/ส้ม) แยกตามสาขาวิชา</p>
+          </div>
+          <span class="section-tag tag-steel" id="p2MajorChartBadge">รายสาขาวิชา</span>
+        </div>
+        <div id="p2MajorChartWrapper" style="position: relative; height: 340px; width: 100%;">
+          <canvas id="p2MajorComparisonChart"></canvas>
+        </div>
+      </div>
+
+      <!-- ตารางสรุปแต่ละสาขาวิชา (Program Summary Table) -->
+      <div class="panel-card" id="p2ProgramSummaryWrapper" style="margin-bottom: 24px; display: none;">
+        <div class="panel-header">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-steel">03</span>
+            <div>
+              <h3 class="panel-title">ตารางสรุปเปอร์เซ็นต์การบันทึกแยกตามสาขาวิชา <span class="kpi-pct-pill pill-steel" id="p2MajorSummaryCount">0 สาขา</span></h3>
+              <p class="panel-subtitle">คลิกที่สาขาวิชาเพื่อกรองข้อมูล หรือคลิก “ดูอาจารย์ในสาขา” เพื่อตรวจสอบผู้สอนรายบุคคล</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-scroll-container">
+          <table class="data-table corporate-table">
+            <thead>
+              <tr>
+                <th style="width: 60px; text-align: center;">ลำดับ</th>
+                <th>คณะ</th>
+                <th>สาขาวิชา</th>
+                <th style="text-align: center;">กลุ่มทั้งหมด</th>
+                <th style="text-align: center;">บันทึกแล้ว</th>
+                <th style="text-align: center;">ยังไม่บันทึก</th>
+                <th style="width: 210px;">เปอร์เซ็นต์ความสำเร็จ</th>
+                <th style="width: 150px; text-align: center;">การดำเนินการ</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyProgramSummary">
+              <tr><td colspan="8" class="empty-table-cell">ยังไม่มีข้อมูลในระบบ กรุณานำเข้าไฟล์ Excel</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ตารางกลุ่มที่ไม่ได้บันทึกคะแนนเก็บ -->
+      <div class="panel-card" id="p2UnrecordedWrapper" style="margin-bottom: 24px; display: none;">
+        <div class="panel-header">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-gold">04</span>
+            <div>
+              <h3 class="panel-title">รายชื่อกลุ่มเรียนที่ยังไม่บันทึกคะแนนเก็บ <span class="kpi-pct-pill pill-gold" id="tbl1Count">0</span></h3>
+              <p class="panel-subtitle">คลิกชื่ออาจารย์ผู้สอนเพื่อตรวจสอบภาระงานรายบุคคลในหน้า 3</p>
+            </div>
+          </div>
+          <div class="search-box-inline" style="min-width: 280px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" id="searchUnrecordedInput" placeholder="ค้นหารหัสวิชา, ชื่อวิชา, สาขาวิชา, ผู้สอน..." oninput="renderPage2FacultyAnalysis()" />
+          </div>
+        </div>
+
+        <div class="table-scroll-container">
+          <table class="data-table corporate-table">
+            <thead>
+              <tr>
+                <th class="sortable-th" onclick="sortPage2Table('unrecorded', 'courseCode')">รหัสวิชา <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" onclick="sortPage2Table('unrecorded', 'courseName')">ชื่อวิชา <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" onclick="sortPage2Table('unrecorded', 'faculty')">คณะ <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" onclick="sortPage2Table('unrecorded', 'major')">สาขาวิชา <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" onclick="sortPage2Table('unrecorded', 'lecturer')">อาจารย์ผู้สอน <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" style="text-align: center;" onclick="sortPage2Table('unrecorded', 'section')">กลุ่มเรียน <span class="sort-icon">⇅</span></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyUnrecorded">
+              <tr><td colspan="6" class="empty-table-cell">ยังไม่มีข้อมูลในระบบ กรุณากดปุ่ม "นำเข้าไฟล์ Excel" ด้านบน</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-footer-note">
+          <span id="p2TypeFootnote">ประเภท: ตามแผน</span>
+          <span>คลิกที่หัวตารางเพื่อเรียงลำดับข้อมูล</span>
+        </div>
+      </div>
+
+      <!-- ตารางกลุ่มที่บันทึกคะแนนเก็บแล้ว -->
+      <div class="panel-card" id="p2RecordedWrapper" style="display: none;">
+        <div class="panel-header">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-green">05</span>
+            <div>
+              <h3 class="panel-title">รายชื่อกลุ่มเรียนที่บันทึกคะแนนเก็บแล้ว <span class="kpi-pct-pill pill-green" id="tbl2Count">0</span></h3>
+              <p class="panel-subtitle">แสดงรายการกลุ่มเรียนที่ดำเนินการบันทึกคะแนนเก็บเรียบร้อยแล้ว</p>
+            </div>
+          </div>
+          <div class="search-box-inline" style="min-width: 280px;">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+            <input type="text" id="searchRecordedInput" placeholder="ค้นหารหัสวิชา, ชื่อวิชา, สาขาวิชา, ผู้สอน..." oninput="renderPage2FacultyAnalysis()" />
+          </div>
+        </div>
+
+        <div class="table-scroll-container">
+          <table class="data-table corporate-table">
+            <thead>
+              <tr>
+                <th class="sortable-th" onclick="sortPage2Table('recorded', 'courseCode')">รหัสวิชา <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" onclick="sortPage2Table('recorded', 'courseName')">ชื่อวิชา <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" onclick="sortPage2Table('recorded', 'faculty')">คณะ <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" onclick="sortPage2Table('recorded', 'major')">สาขาวิชา <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" onclick="sortPage2Table('recorded', 'lecturer')">อาจารย์ผู้สอน <span class="sort-icon">⇅</span></th>
+                <th class="sortable-th" style="text-align: center;" onclick="sortPage2Table('recorded', 'section')">กลุ่มเรียน <span class="sort-icon">⇅</span></th>
+              </tr>
+            </thead>
+            <tbody id="tbodyRecorded">
+              <tr><td colspan="6" class="empty-table-cell">ยังไม่มีข้อมูลในระบบ กรุณากดปุ่ม "นำเข้าไฟล์ Excel" ด้านบน</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ==================== PAGE 3: INDIVIDUAL INSTRUCTOR TRACKING ==================== -->
+    <section id="page-lecturer" style="display: none;">
+
+      <!-- Filter & Search Bar -->
+      <div class="panel-card" style="margin-bottom: 22px;">
+        <div class="panel-header" style="margin-bottom: 14px;">
+          <div class="section-title-group">
+            <span class="section-num-badge badge-navy">01</span>
+            <div>
+              <h2 class="section-heading">ติดตามสถานะการบันทึกคะแนนระดับอาจารย์รายบุคคล</h2>
+              <p class="section-subdesc">ค้นหาชื่ออาจารย์ กรองตามคณะ สาขาวิชา และสถานะการบันทึก หรือกดดูรายละเอียดรายวิชาและกลุ่มเรียน</p>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <span class="section-tag tag-steel" id="p3TotalLecturersBadge">รายชื่อผู้สอนทั้งหมด: 0 ท่าน</span>
+            <button type="button" class="btn btn-navy-solid btn-sm" id="p3ExportBtn" style="display: none;" onclick="exportPage3LecturerExcel()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>ส่งออกรายงานรายบุคคล</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="resetPage3Lecturer()">↺ ล้างตัวกรอง</button>
+          </div>
+        </div>
+
+        <div class="filter-controls-grid-5">
+          <div class="filter-field">
+            <label for="p3LecturerSearchInput" class="filter-label">1. ค้นหาชื่ออาจารย์</label>
+            <input type="text" id="p3LecturerSearchInput" class="form-input" placeholder="พิมพ์ชื่อ-สกุลอาจารย์..." oninput="onPage3FilterChange()" />
+          </div>
+
+          <div class="filter-field">
+            <label for="p3FacultyFilterSelect" class="filter-label">2. คณะ</label>
+            <select id="p3FacultyFilterSelect" class="form-select" onchange="onPage3FacultyFilterChange()">
+              <option value="ALL">ทุกคณะ (All Faculties)</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="p3MajorFilterSelect" class="filter-label">3. สาขาวิชา</label>
+            <select id="p3MajorFilterSelect" class="form-select" onchange="onPage3FilterChange()">
+              <option value="ALL">ทุกสาขาวิชา (All Majors)</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="p3StatusFilterSelect" class="filter-label">4. สถานะการบันทึก</label>
+            <select id="p3StatusFilterSelect" class="form-select" onchange="onPage3FilterChange()">
+              <option value="ALL">ทั้งหมด (ทุกสถานะ)</option>
+              <option value="HAS_PENDING">ยังมีกลุ่มค้างบันทึก</option>
+              <option value="COMPLETED">บันทึกครบถ้วน 100%</option>
+            </select>
+          </div>
+
+          <div class="filter-field">
+            <label for="p3LecturerSelect" class="filter-label">5. เลือกอาจารย์รายบุคคล</label>
+            <select id="p3LecturerSelect" class="form-select" onchange="renderPage3LecturerAnalysis()">
+              <option value="">-- แสดงตารางสรุปอาจารย์ทั้งหมด --</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Lecturer Profile Banner (Visible when an instructor is selected) -->
+        <div class="lecturer-profile-banner" id="p3LecturerProfileBanner" style="display: none;">
+          <div class="lecturer-avatar" id="p3LecturerAvatar">อ</div>
+          <div style="flex: 1;">
+            <div class="lecturer-name" id="p3LecturerDisplayName">-</div>
+            <div class="lecturer-affiliation" id="p3LecturerAffiliation">คณะตามสังกัดวิชา: - • สาขาวิชา: -</div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="clearSelectedInstructor()">
+            ← กลับไปหน้ารวมรายชื่ออาจารย์
+          </button>
+        </div>
+      </div>
+
+      <!-- VIEW A: ตารางรายชื่ออาจารย์ทั้งหมด (Instructor Directory Table) -->
+      <div id="p3InstructorDirectorySection">
+        <div class="panel-card">
+          <div class="panel-header">
+            <div class="section-title-group">
+              <span class="section-num-badge badge-steel">02</span>
+              <div>
+                <h3 class="panel-title">ตารางรายชื่ออาจารย์ผู้สอนและสถานะการบันทึกคะแนนเก็บ <span class="kpi-pct-pill pill-steel" id="p3DirectoryCount">0 ท่าน</span></h3>
+                <p class="panel-subtitle">แสดงจำนวนรายวิชา กลุ่มเรียนทั้งหมด บันทึกแล้ว ยังไม่บันทึก และสถานะความครบถ้วนของอาจารย์แต่ละท่าน</p>
+              </div>
+            </div>
+
+            <!-- Dropdown เลือกสถานะตรงหัวตาราง -->
+            <div class="section-toolbar">
+              <label for="p3TableStatusFilterSelect" class="filter-label" style="margin: 0;">สถานะ:</label>
+              <select id="p3TableStatusFilterSelect" class="form-select" style="width: auto; min-width: 195px;" onchange="onPage3TableStatusChange(this.value)">
+                <option value="ALL">ทั้งหมด (ทุกสถานะ)</option>
+                <option value="HAS_PENDING">ค้างบันทึก</option>
+                <option value="COMPLETED">บันทึกครบ 100%</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="table-scroll-container">
+            <table class="data-table corporate-table">
+              <thead>
+                <tr>
+                  <th style="width: 60px; text-align: center;">ลำดับ</th>
+                  <th>ชื่อ-สกุล อาจารย์ผู้สอน</th>
+                  <th>คณะ / สาขาวิชา</th>
+                  <th style="text-align: center;">จำนวนรายวิชา</th>
+                  <th style="text-align: center;">กลุ่มเรียนทั้งหมด</th>
+                  <th style="text-align: center;">บันทึกแล้ว</th>
+                  <th style="text-align: center;">ยังไม่บันทึก</th>
+                  <th style="text-align: center;">สถานะการบันทึก</th>
+                  <th style="width: 145px; text-align: center;">รายละเอียด</th>
+                </tr>
+              </thead>
+              <tbody id="p3TbodyInstructorDirectory">
+                <tr>
+                  <td colspan="9" class="empty-table-cell">ยังไม่มีข้อมูลในระบบ กรุณากดปุ่ม "นำเข้าไฟล์ Excel" ด้านบน</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="table-footer-note">
+            <span>เรียงลำดับตามจำนวนกลุ่มเรียนที่ยังไม่บันทึกจากมากไปน้อย</span>
+            <span>คลิกปุ่ม “ดูรายละเอียด” เพื่อตรวจสอบรายวิชาและกลุ่มเรียนที่รับผิดชอบ</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW B: รายละเอียดรายบุคคล (Individual Instructor Detail View) -->
+      <div id="p3LecturerDetailContent" style="display: none;">
+
+        <div class="kpi-grid-4" style="margin-bottom: 24px;">
+          <div class="kpi-card accent-steel">
+            <div class="kpi-label">กลุ่มเรียนทั้งหมดที่รับผิดชอบ</div>
+            <div class="kpi-value" id="p3TotalCourses">0</div>
+            <div class="kpi-footer-line"><span id="p3SplitCountText">ตามแผน 0 • นอกแผน 0</span></div>
+          </div>
+
+          <div class="kpi-card accent-green">
+            <div class="kpi-label">กลุ่มเรียนที่บันทึกแล้ว</div>
+            <div class="kpi-value-inline">
+              <span class="kpi-value text-green" id="p3RecordedCourses">0</span>
+              <span class="kpi-pct-pill pill-green" id="p3RecordedShare">0.00%</span>
+            </div>
+            <div class="kpi-footer-line"><span>ดำเนินการบันทึกคะแนนเรียบร้อย</span></div>
+          </div>
+
+          <div class="kpi-card accent-gold">
+            <div class="kpi-label">กลุ่มเรียนที่ยังไม่บันทึก</div>
+            <div class="kpi-value-inline">
+              <span class="kpi-value text-gold" id="p3UnrecordedCourses">0</span>
+              <span class="kpi-pct-pill pill-gold" id="p3UnrecordedShare">0.00%</span>
+            </div>
+            <div class="kpi-footer-line"><span>กลุ่มเรียนที่ยังไม่มีการบันทึก</span></div>
+          </div>
+
+          <div class="kpi-card accent-magenta">
+            <div class="kpi-label">ร้อยละความสำเร็จรายบุคคล</div>
+            <div class="kpi-value-inline">
+              <span class="kpi-value text-magenta" id="p3SuccessPercent">0.00%</span>
+              <span class="kpi-verdict" id="p3StatusVerdict">-</span>
+            </div>
+            <div class="kpi-progress-wrapper">
+              <div class="kpi-progress-track">
+                <div class="kpi-progress-fill fill-green" id="p3ProgressBar" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- รายวิชาตามแผน (In-Plan) -->
+        <div class="section-block" id="p3InPlanSectionBlock">
+          <div class="section-header-row">
+            <div class="section-title-group">
+              <span class="section-num-badge badge-steel">02</span>
+              <div>
+                <h3 class="section-heading">รายวิชาตามแผน (In-Plan) ที่รับผิดชอบ</h3>
+                <p class="section-subdesc" id="p3InPlanSummarySub">ทั้งหมด 0 กลุ่มเรียน • บันทึกแล้ว 0 • ยังไม่บันทึก 0</p>
+              </div>
+            </div>
+            <span class="section-tag tag-steel">ตามแผน</span>
+          </div>
+
+          <div class="panel-card" id="p3CardInUnrec" style="margin-bottom: 16px;">
+            <div class="panel-header">
+              <h4 class="panel-title">รายวิชาตามแผน — ยังไม่บันทึก <span class="kpi-pct-pill pill-gold" id="p3InUnrecCount">0</span></h4>
+            </div>
+            <div class="table-scroll-container">
+              <table class="data-table corporate-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortPage3Table('inUnrec', 'courseCode')">รหัสวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('inUnrec', 'courseName')">ชื่อวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('inUnrec', 'faculty')">คณะ <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('inUnrec', 'major')">สาขาวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" style="text-align: center;" onclick="sortPage3Table('inUnrec', 'section')">กลุ่มเรียน <span class="sort-icon">⇅</span></th>
+                  </tr>
+                </thead>
+                <tbody id="p3TbodyInUnrec"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-card" id="p3CardInRec">
+            <div class="panel-header">
+              <h4 class="panel-title">รายวิชาตามแผน — บันทึกแล้ว <span class="kpi-pct-pill pill-green" id="p3InRecCount">0</span></h4>
+            </div>
+            <div class="table-scroll-container">
+              <table class="data-table corporate-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortPage3Table('inRec', 'courseCode')">รหัสวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('inRec', 'courseName')">ชื่อวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('inRec', 'faculty')">คณะ <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('inRec', 'major')">สาขาวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" style="text-align: center;" onclick="sortPage3Table('inRec', 'section')">กลุ่มเรียน <span class="sort-icon">⇅</span></th>
+                  </tr>
+                </thead>
+                <tbody id="p3TbodyInRec"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- รายวิชานอกแผน (Out-of-Plan) -->
+        <div class="section-block" id="p3OutPlanSectionBlock">
+          <div class="section-header-row">
+            <div class="section-title-group">
+              <span class="section-num-badge badge-navy" id="p3OutPlanBadgeNum">03</span>
+              <div>
+                <h3 class="section-heading">รายวิชานอกแผน (Out-of-Plan) ที่รับผิดชอบ</h3>
+                <p class="section-subdesc" id="p3OutPlanSummarySub">ทั้งหมด 0 กลุ่มเรียน • บันทึกแล้ว 0 • ยังไม่บันทึก 0</p>
+              </div>
+            </div>
+            <span class="section-tag tag-navy">นอกแผน</span>
+          </div>
+
+          <div class="panel-card" id="p3CardOutUnrec" style="margin-bottom: 16px;">
+            <div class="panel-header">
+              <h4 class="panel-title">รายวิชานอกแผน — ยังไม่บันทึก <span class="kpi-pct-pill pill-gold" id="p3OutUnrecCount">0</span></h4>
+            </div>
+            <div class="table-scroll-container">
+              <table class="data-table corporate-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortPage3Table('outUnrec', 'courseCode')">รหัสวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('outUnrec', 'courseName')">ชื่อวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('outUnrec', 'faculty')">คณะ <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('outUnrec', 'major')">สาขาวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" style="text-align: center;" onclick="sortPage3Table('outUnrec', 'section')">กลุ่มเรียน <span class="sort-icon">⇅</span></th>
+                  </tr>
+                </thead>
+                <tbody id="p3TbodyOutUnrec"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel-card" id="p3CardOutRec">
+            <div class="panel-header">
+              <h4 class="panel-title">รายวิชานอกแผน — บันทึกแล้ว <span class="kpi-pct-pill pill-green" id="p3OutRecCount">0</span></h4>
+            </div>
+            <div class="table-scroll-container">
+              <table class="data-table corporate-table">
+                <thead>
+                  <tr>
+                    <th class="sortable-th" onclick="sortPage3Table('outRec', 'courseCode')">รหัสวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('outRec', 'courseName')">ชื่อวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('outRec', 'faculty')">คณะ <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" onclick="sortPage3Table('outRec', 'major')">สาขาวิชา <span class="sort-icon">⇅</span></th>
+                    <th class="sortable-th" style="text-align: center;" onclick="sortPage3Table('outRec', 'section')">กลุ่มเรียน <span class="sort-icon">⇅</span></th>
+                  </tr>
+                </thead>
+                <tbody id="p3TbodyOutRec"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ==================== FOOTER / DATA SOURCE WATERMARK ==================== -->
+    <footer class="dashboard-footer-note">
+      <div class="footer-note-left">
+        <p>
+          <strong>แหล่งข้อมูล:</strong> ไฟล์ “รายงานการบันทึกคะแนนเก็บ” <span id="footerTermRoundText">ภาค 1-2569 รอบที่ 2 (ครั้งที่ 6-10)</span>
+          <span id="footerDateText"></span>
+        </p>
+        <p>
+          <strong>หมายเหตุการคำนวณ:</strong> คัดแยกกลุ่มเรียนที่ได้รับยกเว้น (<span id="footerExcludedCount">0</span> กลุ่ม) และยังไม่ถึงกำหนดส่ง (<span id="footerNotDueCount">0</span> กลุ่ม) ออกจากฐานการคำนวณเรียบร้อยแล้ว
+        </p>
+      </div>
+      <div class="footer-note-right">
+        จัดทำโดย สำนักงานวิชาการ SPU
+      </div>
+    </footer>
+
+  </main>
+
+  <!-- ==================== EXCEL UPLOAD, PREVIEW, VALIDATION & HISTORY MODAL ==================== -->
+  <div class="modal-backdrop" id="excelImportModal" style="display: none;" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <div class="modal-icon-badge">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="16" y1="13" x2="8" y2="13" />
+              <line x1="16" y1="17" x2="8" y2="17" />
+            </svg>
+          </div>
+          <div>
+            <h3 class="modal-title">นำเข้าไฟล์ Excel รายงานการบันทึกคะแนนเก็บ</h3>
+            <p class="modal-subtitle">รองรับไฟล์ .xlsx, .xls และ .csv • ตรวจสอบตัวอย่างข้อมูลและความถูกต้องก่อนนำเข้าสู่ Dashboard</p>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeExcelImportModal()">✕</button>
+      </div>
+
+      <!-- Modal Sub-tabs: Import Wizard vs Import History -->
+      <div class="modal-subtabs">
+        <button type="button" class="modal-subtab active" id="tabImportWizard" onclick="switchModalTab('wizard')">
+          1. อัปโหลดและตรวจสอบไฟล์ (Upload &amp; Preview)
+        </button>
+        <button type="button" class="modal-subtab" id="tabImportHistory" onclick="switchModalTab('history')">
+          2. ประวัติการนำเข้าข้อมูล (Import History) <span class="history-count-badge" id="importHistoryBadge">0</span>
+        </button>
+      </div>
+
+      <!-- TAB 1: UPLOAD, PREVIEW & VALIDATION -->
+      <div class="modal-body" id="modalBodyWizard">
+        <!-- Step 1: Dropzone -->
+        <div class="upload-dropzone" id="excelDropzone" onclick="document.getElementById('excelFileInput').click()">
+          <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" style="display: none;" />
+          <div class="dropzone-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </div>
+          <div class="dropzone-title">ลากไฟล์ Excel มาวางที่นี่ หรือ <span class="text-magenta underline">คลิกเพื่อเลือกไฟล์จากอุปกรณ์</span></div>
+          <div class="dropzone-hint">รองรับรูปแบบไฟล์ .xlsx, .xls, .csv ตามโครงสร้างรายงานสำนักงานวิชาการ</div>
+        </div>
+
+        <!-- File Info & Validation Summary (Shown after file is selected) -->
+        <div id="excelStagingArea" style="display: none; margin-top: 18px;">
+          <!-- Selected File Bar -->
+          <div class="staged-file-bar">
+            <div class="staged-file-meta">
+              <span class="file-ext-badge">XLSX</span>
+              <div>
+                <div class="staged-file-name" id="stagedFileName">-</div>
+                <div class="staged-file-size" id="stagedFileSize">ขนาดไฟล์: - • สถานะ: อ่านไฟล์สำเร็จ</div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('excelFileInput').click()">
+              เปลี่ยนไฟล์
+            </button>
+          </div>
+
+          <!-- Validation Status Cards -->
+          <div class="validation-grid">
+            <div class="val-card val-ok">
+              <div class="val-label">รายการข้อมูลที่ถูกต้องพร้อมนำเข้า</div>
+              <div class="val-num text-green" id="valValidRowsCount">0 รายการ</div>
+              <div class="val-desc" id="valSheetSummaryText">พบชีตข้อมูลครบถ้วน</div>
+            </div>
+            <div class="val-card val-warn">
+              <div class="val-label">ข้อสังเกต / ข้อมูลว่างหรือซ้ำ</div>
+              <div class="val-num text-gold" id="valErrorRowsCount">0 รายการ</div>
+              <div class="val-desc" id="valErrorHintText">ไม่พบข้อผิดพลาดร้ายแรง</div>
+            </div>
+          </div>
+
+          <!-- Validation Issue Details (if any) -->
+          <div class="validation-issues-box" id="validationIssuesBox" style="display: none;">
+            <div class="val-issues-title">รายละเอียดการตรวจสอบความถูกต้อง (Data Validation):</div>
+            <ul id="validationIssuesList" class="val-issues-list"></ul>
+          </div>
+
+          <!-- Sheet Selector & Preview Table -->
+          <div class="preview-header-bar">
+            <div class="preview-controls">
+              <label for="previewSheetSelect" class="filter-label" style="margin: 0;">เลือก Sheet ตัวอย่าง:</label>
+              <select id="previewSheetSelect" class="form-select-sm" onchange="renderExcelPreviewSheet()"></select>
+            </div>
+            <div class="preview-dims" id="previewSheetDimensions">แสดงตัวอย่าง 0 แถว × 0 คอลัมน์</div>
+          </div>
+
+          <div class="table-scroll-container" style="max-height: 270px; overflow-y: auto;">
+            <table class="data-table corporate-table preview-table">
+              <thead id="previewTableHead"></thead>
+              <tbody id="previewTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 2: IMPORT HISTORY -->
+      <div class="modal-body" id="modalBodyHistory" style="display: none;">
+        <div class="table-scroll-container">
+          <table class="data-table corporate-table">
+            <thead>
+              <tr>
+                <th style="width: 60px; text-align: center;">ครั้งที่</th>
+                <th>ชื่อไฟล์ที่นำเข้า</th>
+                <th>วันที่และเวลานำเข้า</th>
+                <th style="text-align: center;">จำนวนรายการที่นำเข้า</th>
+                <th style="text-align: center;">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyImportHistory">
+              <tr>
+                <td colspan="5" class="empty-table-cell">ยังไม่มีประวัติการนำเข้าข้อมูลในเซสชันนี้</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeExcelImportModal()">ยกเลิก / ปิดหน้าต่าง</button>
+        <button type="button" class="btn btn-green" id="btnConfirmImport" onclick="confirmExcelImport()" disabled>
+          ✓ ยืนยันการนำเข้าข้อมูลเข้าสู่ Dashboard
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toastMsg" class="toast-notification" style="display: none;"></div>
+
+  <!-- Custom Application Script -->
+  <script src="app.js"></script>
+</body>
+</html>
