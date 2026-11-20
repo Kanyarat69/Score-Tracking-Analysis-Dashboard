@@ -288,7 +288,7 @@ function stageExcelFile(file) {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array' });
 
-      // Run dry-run validation using existing parsing logic
+      // Run dry-run validation using source-truth parsing logic
       const validation = validateWorkbookBeforeImport(workbook);
 
       appState.stagedImport = {
@@ -337,6 +337,13 @@ function stageExcelFile(file) {
   reader.readAsArrayBuffer(file);
 }
 
+function hasDedicatedDetailSheets(workbook) {
+  return workbook.SheetNames.some(s => {
+    const norm = normalizeText(s);
+    return norm === 'รายวิชาตามแผน' || norm === 'รายวิชานอกแผน';
+  });
+}
+
 function validateWorkbookBeforeImport(workbook) {
   const issues = [];
   const sheetSumIn = findSheet(workbook, ['สรุปการบันทึก (ตามแผน)', 'สรุปการบันทึก(ตามแผน)', 'สรุปตามแผน']);
@@ -347,14 +354,20 @@ function validateWorkbookBeforeImport(workbook) {
   }
 
   let validCount = 0;
-  const seenKeys = new Set();
+  const seenKeys = new Map();
+  const skipPivotSheets = hasDedicatedDetailSheets(workbook);
 
   workbook.SheetNames.forEach(sheetName => {
     const norm = normalizeText(sheetName);
     if (norm.includes('สรุป') || norm.includes('ยกเว้น') || norm.includes('ยังไม่ถึงกำหนด')) return;
+    if (skipPivotSheets && norm.startsWith('รายงานการบันทึก')) return;
 
     const sheet = workbook.Sheets[sheetName];
-    const parsed = parseDetailSheet(sheet, null, null);
+    let cType = null;
+    if (norm.includes('นอกแผน')) cType = 'OUT_OF_PLAN';
+    else if (norm.includes('ตามแผน')) cType = 'IN_PLAN';
+
+    const parsed = parseDetailSheet(sheet, cType, null, issues, sheetName);
     validCount += parsed.length;
 
     parsed.forEach((item, idx) => {
@@ -366,9 +379,14 @@ function validateWorkbookBeforeImport(workbook) {
       }
       const dupKey = `${item.courseType}|${item.courseCode}|${item.section}|${item.lecturer}`;
       if (seenKeys.has(dupKey)) {
-        issues.push(`ชีต "${sheetName}" รหัสวิชา ${item.courseCode} กลุ่ม ${item.section} (${item.lecturer}): พบข้อมูลซ้ำซ้อน`);
+        const prevStatus = seenKeys.get(dupKey);
+        if (prevStatus !== item.status) {
+          issues.push(`ชีต "${sheetName}" รหัสวิชา ${item.courseCode} กลุ่ม ${item.section} (${item.lecturer}): พบข้อมูลต้นทางขัดแย้งกันระหว่างสถานะบันทึกแล้วและยังไม่บันทึก`);
+        } else {
+          issues.push(`ชีต "${sheetName}" รหัสวิชา ${item.courseCode} กลุ่ม ${item.section} (${item.lecturer}): พบข้อมูลซ้ำซ้อน`);
+        }
       } else {
-        seenKeys.add(dupKey);
+        seenKeys.set(dupKey, item.status);
       }
     });
   });
@@ -428,7 +446,7 @@ function confirmExcelImport() {
   if (!appState.stagedImport) return;
   const { workbook, fileName } = appState.stagedImport;
 
-  // Execute existing core business logic untouched
+  // Execute core business logic with verified source-truth status
   parseWorkbookData(workbook, fileName);
 
   const nowStr = new Date().toLocaleString('th-TH', {
@@ -573,7 +591,7 @@ function parseSummarySheet(sheet) {
   return result;
 }
 
-function parseDetailSheet(sheet, courseType, forceStatus = null) {
+function parseDetailSheet(sheet, courseType, forceStatus = null, conflictLog = null, sheetLabel = '') {
   const items = [];
   if (!sheet) return items;
 
@@ -600,6 +618,9 @@ function parseDetailSheet(sheet, courseType, forceStatus = null) {
   const idxLecturer = headers.findIndex(h => h.includes('ผู้สอน') || h.includes('อาจารย์'));
   const idxRecCount = headers.findIndex(h => h.includes('จำนวนครั้ง') || h.includes('เก็บคะแนน'));
   const idxPlanCol = headers.findIndex(h => h.includes('แผน') || h.includes('ประเภท'));
+  // อ่านคอลัมน์สถานะจริงจาก Excel ('บันทึก' / 'ไม่บันทึก') แบบตรงตัว
+  const idxRecordedCol = headers.findIndex(h => h === 'บันทึก' || h === 'สถานะการบันทึก');
+  const idxUnrecordedCol = headers.findIndex(h => h === 'ไม่บันทึก' || h === 'ไม่ได้บันทึก');
 
   let lastFaculty = '';
   let lastMajor = '';
@@ -624,7 +645,36 @@ function parseDetailSheet(sheet, courseType, forceStatus = null) {
     if (!rowCourseType) rowCourseType = 'IN_PLAN';
 
     const recCount = idxRecCount >= 0 ? Number(r[idxRecCount]) || 0 : 0;
-    const status = forceStatus ? forceStatus : recCount > 0 ? 'RECORDED' : 'UNRECORDED';
+    const rawSection = idxSection >= 0 ? String(r[idxSection] ?? '').trim() || '-' : '-';
+
+    // กำหนดสถานะจากข้อมูลต้นฉบับเท่านั้น ไม่คาดเดาสถานะเอง
+    let status = null;
+    if (forceStatus) {
+      status = forceStatus;
+    } else if (idxRecordedCol >= 0 || idxUnrecordedCol >= 0) {
+      const recCell = idxRecordedCol >= 0 ? String(r[idxRecordedCol] ?? '').trim() : '';
+      const unrecCell = idxUnrecordedCol >= 0 ? String(r[idxUnrecordedCol] ?? '').trim() : '';
+      const isRecFlag = recCell === '1' || recCell === 'บันทึกแล้ว';
+      const isUnrecFlag = unrecCell === '1' || unrecCell === 'ไม่บันทึก' || unrecCell === 'ยังไม่บันทึก';
+
+      if (isRecFlag && isUnrecFlag) {
+        if (conflictLog) {
+          conflictLog.push(`ชีต "${sheetLabel}" แถวที่ ${i + 1}: ข้อมูลต้นทางขัดแย้งกัน (ระบุทั้งบันทึกและไม่บันทึก) — ${rawCode} กลุ่ม ${rawSection}`);
+        }
+        continue;
+      } else if (isRecFlag) {
+        status = 'RECORDED';
+      } else if (isUnrecFlag || recCell === '0') {
+        status = 'UNRECORDED';
+      } else {
+        if (conflictLog) {
+          conflictLog.push(`ชีต "${sheetLabel}" แถวที่ ${i + 1}: ไม่พบค่าสถานะที่ชัดเจนในคอลัมน์บันทึก/ไม่บันทึก — ${rawCode} กลุ่ม ${rawSection}`);
+        }
+        continue;
+      }
+    } else {
+      status = recCount > 0 ? 'RECORDED' : 'UNRECORDED';
+    }
 
     items.push({
       courseType: rowCourseType,
@@ -633,7 +683,7 @@ function parseDetailSheet(sheet, courseType, forceStatus = null) {
       major: lastMajor || 'ไม่ระบุสาขาวิชา',
       courseCode: rawCode,
       courseName: rawName,
-      section: idxSection >= 0 ? String(r[idxSection] ?? '').trim() || '-' : '-',
+      section: rawSection,
       lecturer: idxLecturer >= 0 ? String(r[idxLecturer] ?? '').trim() || 'ไม่ระบุผู้สอน' : 'ไม่ระบุผู้สอน',
       recordedCount: recCount
     });
@@ -655,13 +705,15 @@ function parseGovernanceSheetCount(sheet) {
 function parseWorkbookData(workbook, fileName) {
   const sheetSumIn = findSheet(workbook, ['สรุปการบันทึก (ตามแผน)', 'สรุปการบันทึก(ตามแผน)', 'สรุปตามแผน']);
   const sheetSumOut = findSheet(workbook, ['สรุปการบันทึก(นอกแผน)', 'สรุปการบันทึก (นอกแผน)', 'สรุปนอกแผน']);
-  const sheetExcluded = findSheet(workbook, ['กลุ่มที่ได้รับยกเว้น', 'ยกเว้น']);
+  const sheetExcluded = findSheet(workbook, ['กลุ่มที่ได้รับยกเว้น', 'รายวิชาได้รับยกเว้น', 'ยกเว้น']);
   const sheetNotDue = findSheet(workbook, ['ยังไม่ถึงกำหนดส่ง', 'ยังไม่ถึงกำหนด']);
 
   const inSummary = parseSummarySheet(sheetSumIn);
   const outSummary = parseSummarySheet(sheetSumOut);
 
-  let detailRecords = [];
+  let rawDetailRecords = [];
+  const conflictMessages = [];
+  const skipPivotSheets = hasDedicatedDetailSheets(workbook);
 
   workbook.SheetNames.forEach(sheetName => {
     const norm = normalizeText(sheetName);
@@ -674,6 +726,11 @@ function parseWorkbookData(workbook, fileName) {
       return;
     }
 
+    // ข้ามชีตสรุป Pivot ('รายงานการบันทึก...') เมื่อมีชีตข้อมูลรายกลุ่ม ('รายวิชาตามแผน' / 'รายวิชานอกแผน') อยู่แล้ว เพื่อไม่ให้นำข้อมูลซ้ำเข้าสู่ระบบ
+    if (skipPivotSheets && norm.startsWith('รายงานการบันทึก')) {
+      return;
+    }
+
     const sheet = workbook.Sheets[sheetName];
     let cType = null;
     if (norm.includes('นอกแผน')) cType = 'OUT_OF_PLAN';
@@ -682,14 +739,35 @@ function parseWorkbookData(workbook, fileName) {
     let fStatus = null;
     if (norm.includes('ไม่บันทึก') || norm.includes('ยังไม่บันทึก') || norm.includes('ค้าง')) {
       fStatus = 'UNRECORDED';
-    } else if (norm.includes('บันทึกแล้ว') || (norm.includes('บันทึก') && !norm.includes('ไม่บันทึก'))) {
+    } else if (norm.includes('บันทึกแล้ว') || (norm.includes('บันทึก') && !norm.includes('ไม่บันทึก') && !norm.startsWith('รายงานการบันทึก'))) {
       fStatus = 'RECORDED';
     }
 
-    const parsed = parseDetailSheet(sheet, cType, fStatus);
+    const parsed = parseDetailSheet(sheet, cType, fStatus, conflictMessages, sheetName);
     if (parsed.length > 0) {
-      detailRecords.push(...parsed);
+      rawDetailRecords.push(...parsed);
     }
+  });
+
+  // ตรวจสอบความขัดแย้งของสถานะในระดับรหัสวิชา + กลุ่มเรียน + ผู้สอน (หากพบข้อมูลขัดแย้งกัน ให้รายงานและหยุดกำหนดสถานะเอง)
+  const recordStatusMap = new Map();
+  const conflictedKeys = new Set();
+
+  rawDetailRecords.forEach(r => {
+    const key = `${r.courseType}|${r.courseCode}|${r.section}|${r.lecturer}`;
+    if (!recordStatusMap.has(key)) {
+      recordStatusMap.set(key, r.status);
+    } else if (recordStatusMap.get(key) !== r.status) {
+      conflictedKeys.add(key);
+      conflictMessages.push(
+        `ข้อมูลต้นทางขัดแย้งกัน: ${r.courseCode} ${r.courseName} กลุ่ม ${r.section} (${r.lecturer}) ปรากฏทั้งสถานะบันทึกแล้วและยังไม่บันทึก`
+      );
+    }
+  });
+
+  const detailRecords = rawDetailRecords.filter(r => {
+    const key = `${r.courseType}|${r.courseCode}|${r.section}|${r.lecturer}`;
+    return !conflictedKeys.has(key);
   });
 
   appState.hasLoadedData = true;
@@ -716,7 +794,13 @@ function parseWorkbookData(workbook, fileName) {
   populateFilterDropdowns();
   renderAllViews();
 
-  if (detailRecords.length === 0) {
+  if (conflictMessages.length > 0) {
+    console.warn('Source data conflicts detected:', conflictMessages);
+    showToast(
+      `พบข้อมูลต้นทางขัดแย้งกัน ${conflictMessages.length} รายการ (หยุดการกำหนดสถานะเองสำหรับรายการที่ขัดแย้ง กรุณาตรวจสอบใน Console)`,
+      true
+    );
+  } else if (detailRecords.length === 0) {
     showToast(
       `อ่านชีตสรุปได้แล้ว แต่ไม่พบตารางรายกลุ่มในชีตย่อย (ชื่อชีตที่พบ: ${workbook.SheetNames.join(', ')})`,
       true
